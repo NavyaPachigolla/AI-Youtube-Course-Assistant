@@ -89,13 +89,11 @@ uploaded_pdfs = st.sidebar.file_uploader(
 def load_embedding_model():
 
     model = SentenceTransformer(
-        "sentence-transformers/all-MiniLM-L6-v2"
+        "sentence-transformers/all-MiniLM-L6-v2",
+        device="cpu"
     )
 
     return model
-
-embedding_model = load_embedding_model()
-
 # ---------------------------------------------------
 # INITIALIZE CHAT HISTORY
 # ---------------------------------------------------
@@ -191,8 +189,8 @@ def split_text_into_chunks(text):
 
     text_splitter = RecursiveCharacterTextSplitter(
 
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=500,
+        chunk_overlap=100,
         length_function=len
 
     )

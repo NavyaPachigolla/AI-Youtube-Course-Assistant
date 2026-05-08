@@ -1,13 +1,9 @@
 streamlit
 youtube-transcript-api
 pypdf
-langchain
-langchain-community
 langchain-text-splitters
 sentence-transformers
 faiss-cpu==1.12.0
 numpy
 groq
 python-dotenv
-torch
-transformers
