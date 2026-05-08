@@ -23,10 +23,20 @@ from groq import Groq
 load_dotenv()
 
 # ---------------------------------------------------
-# GROQ API KEY
+# GET GROQ API KEY
 # ---------------------------------------------------
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+# ---------------------------------------------------
+# VALIDATE API KEY
+# ---------------------------------------------------
+
+if not GROQ_API_KEY:
+
+    st.error("❌ GROQ_API_KEY not found.")
+
+    st.stop()
 
 # ---------------------------------------------------
 # INITIALIZE GROQ CLIENT
@@ -37,7 +47,7 @@ client = Groq(
 )
 
 # ---------------------------------------------------
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ---------------------------------------------------
 
 st.set_page_config(
@@ -55,9 +65,12 @@ st.title("🎓 AI YouTube Course Assistant")
 st.markdown(
     """
 AI-powered RAG chatbot for:
-- YouTube Courses
-- PDF Notes
-- Study Materials
+
+✅ YouTube Courses  
+✅ PDF Notes  
+✅ Study Materials  
+
+Ask questions and get AI-generated answers.
 """
 )
 
@@ -71,15 +84,39 @@ st.sidebar.markdown(
     """
 ### Supported Inputs
 - YouTube Videos
-- PDF Documents
+- PDF Notes
 """
 )
 
+# ---------------------------------------------------
+# YOUTUBE URL INPUT
+# ---------------------------------------------------
+
+youtube_url = st.sidebar.text_input(
+    "🔗 Enter YouTube Video URL"
+)
+
+# ---------------------------------------------------
+# PDF UPLOADER
+# ---------------------------------------------------
+
 uploaded_pdfs = st.sidebar.file_uploader(
-    "Upload PDF Notes",
+    "📄 Upload PDF Notes",
     type=["pdf"],
     accept_multiple_files=True
 )
+
+# ---------------------------------------------------
+# LIMIT PDF UPLOADS
+# ---------------------------------------------------
+
+if uploaded_pdfs and len(uploaded_pdfs) > 5:
+
+    st.sidebar.error(
+        "⚠ Maximum 5 PDFs allowed"
+    )
+
+    st.stop()
 
 # ---------------------------------------------------
 # LOAD EMBEDDING MODEL
@@ -94,6 +131,9 @@ def load_embedding_model():
     )
 
     return model
+
+embedding_model = load_embedding_model()
+
 # ---------------------------------------------------
 # INITIALIZE CHAT HISTORY
 # ---------------------------------------------------
@@ -108,27 +148,33 @@ if "chat_history" not in st.session_state:
 
 def extract_video_id(youtube_url):
 
-    parsed_url = urlparse(youtube_url)
+    try:
 
-    # Short URL
-    if parsed_url.hostname == "youtu.be":
+        parsed_url = urlparse(youtube_url)
 
-        return parsed_url.path[1:]
+        # Short URL
+        if parsed_url.hostname == "youtu.be":
 
-    # Normal URL
-    if parsed_url.hostname in (
-        "www.youtube.com",
-        "youtube.com"
-    ):
+            return parsed_url.path[1:]
 
-        if parsed_url.path == "/watch":
+        # Normal URL
+        if parsed_url.hostname in (
+            "www.youtube.com",
+            "youtube.com"
+        ):
 
-            return parse_qs(parsed_url.query)["v"][0]
+            if parsed_url.path == "/watch":
 
-    return None
+                return parse_qs(
+                    parsed_url.query
+                )["v"][0]
+
+    except:
+
+        return None
 
 # ---------------------------------------------------
-# FUNCTION TO FETCH TRANSCRIPT
+# FUNCTION TO FETCH YOUTUBE TRANSCRIPT
 # ---------------------------------------------------
 
 def get_youtube_transcript(video_id):
@@ -137,7 +183,9 @@ def get_youtube_transcript(video_id):
 
         ytt_api = YouTubeTranscriptApi()
 
-        transcript = ytt_api.fetch(video_id).to_raw_data()
+        transcript = ytt_api.fetch(
+            video_id
+        ).to_raw_data()
 
         full_text = " ".join(
             [item["text"] for item in transcript]
@@ -147,7 +195,9 @@ def get_youtube_transcript(video_id):
 
     except Exception as e:
 
-        st.error(f"Error fetching transcript: {e}")
+        st.error(
+            f"❌ Error fetching transcript: {e}"
+        )
 
         return None
 
@@ -177,12 +227,14 @@ def extract_pdf_text(uploaded_files):
 
     except Exception as e:
 
-        st.error(f"Error reading PDF: {e}")
+        st.error(
+            f"❌ Error reading PDF: {e}"
+        )
 
         return None
 
 # ---------------------------------------------------
-# FUNCTION TO SPLIT TEXT INTO CHUNKS
+# FUNCTION TO SPLIT TEXT
 # ---------------------------------------------------
 
 def split_text_into_chunks(text):
@@ -205,7 +257,9 @@ def split_text_into_chunks(text):
 
 def create_embeddings(chunks):
 
-    embeddings = embedding_model.encode(chunks)
+    embeddings = embedding_model.encode(
+        chunks
+    )
 
     return embeddings
 
@@ -224,7 +278,7 @@ def create_faiss_index(embeddings):
     return index
 
 # ---------------------------------------------------
-# FUNCTION TO RETRIEVE RELEVANT CHUNKS
+# FUNCTION TO RETRIEVE CHUNKS
 # ---------------------------------------------------
 
 def retrieve_relevant_chunks(
@@ -234,18 +288,25 @@ def retrieve_relevant_chunks(
     top_k=3
 ):
 
-    query_embedding = embedding_model.encode([query])
+    query_embedding = embedding_model.encode(
+        [query]
+    )
 
     distances, indices = index.search(
+
         np.array(query_embedding),
+
         top_k
+
     )
 
     retrieved_chunks = []
 
     for idx in indices[0]:
 
-        retrieved_chunks.append(chunks[idx])
+        retrieved_chunks.append(
+            chunks[idx]
+        )
 
     return retrieved_chunks
 
@@ -253,9 +314,14 @@ def retrieve_relevant_chunks(
 # FUNCTION TO GENERATE AI RESPONSE
 # ---------------------------------------------------
 
-def generate_ai_response(question, retrieved_chunks):
+def generate_ai_response(
+    question,
+    retrieved_chunks
+):
 
-    context = "\n\n".join(retrieved_chunks)
+    context = "\n\n".join(
+        retrieved_chunks
+    )
 
     prompt = f"""
 You are an AI Course Assistant.
@@ -294,26 +360,18 @@ Provide a clear, concise and helpful answer.
 
     except Exception as e:
 
-        return f"Error generating response: {e}"
-
-# ---------------------------------------------------
-# YOUTUBE URL INPUT
-# ---------------------------------------------------
-
-youtube_url = st.text_input(
-    "🔗 Enter YouTube Video URL"
-)
+        return f"❌ Error generating response: {e}"
 
 # ---------------------------------------------------
 # PROCESS CONTENT BUTTON
 # ---------------------------------------------------
 
-if st.button("📥 Process Content"):
+if st.sidebar.button("📥 Process Content"):
 
     all_text = ""
 
     # ---------------------------------------------------
-    # PROCESS YOUTUBE TRANSCRIPT
+    # PROCESS YOUTUBE
     # ---------------------------------------------------
 
     if youtube_url:
@@ -322,7 +380,9 @@ if st.button("📥 Process Content"):
             "Fetching YouTube transcript..."
         ):
 
-            video_id = extract_video_id(youtube_url)
+            video_id = extract_video_id(
+                youtube_url
+            )
 
             if video_id:
 
@@ -345,7 +405,7 @@ if st.button("📥 Process Content"):
                 )
 
     # ---------------------------------------------------
-    # PROCESS PDF FILES
+    # PROCESS PDFS
     # ---------------------------------------------------
 
     if uploaded_pdfs:
@@ -373,7 +433,7 @@ if st.button("📥 Process Content"):
     if all_text:
 
         with st.spinner(
-            "Creating text chunks..."
+            "Creating chunks..."
         ):
 
             chunks = split_text_into_chunks(
@@ -381,7 +441,7 @@ if st.button("📥 Process Content"):
             )
 
             st.success(
-                f"✅ Created {len(chunks)} chunks!"
+                f"✅ Created {len(chunks)} chunks"
             )
 
         # ---------------------------------------------------
@@ -397,7 +457,7 @@ if st.button("📥 Process Content"):
             )
 
             st.success(
-                "✅ Embeddings created!"
+                "✅ Embeddings created"
             )
 
         # ---------------------------------------------------
@@ -405,7 +465,7 @@ if st.button("📥 Process Content"):
         # ---------------------------------------------------
 
         with st.spinner(
-            "Creating FAISS vector database..."
+            "Creating vector database..."
         ):
 
             faiss_index = create_faiss_index(
@@ -413,11 +473,11 @@ if st.button("📥 Process Content"):
             )
 
             st.success(
-                "✅ FAISS database ready!"
+                "✅ FAISS database ready"
             )
 
         # ---------------------------------------------------
-        # STORE IN SESSION STATE
+        # SAVE IN SESSION
         # ---------------------------------------------------
 
         st.session_state["chunks"] = chunks
@@ -425,41 +485,36 @@ if st.button("📥 Process Content"):
         st.session_state["faiss_index"] = faiss_index
 
         st.success(
-            "🎉 AI Course Assistant is Ready!"
+            "🎉 AI Course Assistant Ready!"
         )
 
     else:
 
         st.warning(
-            "⚠ Please provide YouTube URL or PDFs"
+            "⚠ Please upload PDFs or enter YouTube URL"
         )
 
 # ---------------------------------------------------
 # CHATBOT SECTION
 # ---------------------------------------------------
 
-st.subheader("💬 AI Chatbot")
+st.subheader("💬 Ask Questions")
 
 user_question = st.chat_input(
     "Ask a question about the course..."
 )
 
 # ---------------------------------------------------
-# PROCESS USER QUESTION
+# HANDLE USER QUESTION
 # ---------------------------------------------------
 
 if user_question:
 
-    # Show user message
     st.chat_message("user").write(
         user_question
     )
 
     if "faiss_index" in st.session_state:
-
-        # ---------------------------------------------------
-        # RETRIEVE RELEVANT CHUNKS
-        # ---------------------------------------------------
 
         with st.spinner(
             "Searching course content..."
@@ -474,11 +529,8 @@ if user_question:
                 chunks=st.session_state["chunks"],
 
                 top_k=3
-            )
 
-        # ---------------------------------------------------
-        # GENERATE AI RESPONSE
-        # ---------------------------------------------------
+            )
 
         with st.spinner(
             "Generating AI response..."
@@ -489,10 +541,11 @@ if user_question:
                 user_question,
 
                 retrieved_chunks
+
             )
 
         # ---------------------------------------------------
-        # STORE CHAT HISTORY
+        # SAVE CHAT HISTORY
         # ---------------------------------------------------
 
         st.session_state.chat_history.append(
@@ -503,7 +556,7 @@ if user_question:
         )
 
         # ---------------------------------------------------
-        # DISPLAY AI RESPONSE
+        # SHOW RESPONSE
         # ---------------------------------------------------
 
         st.chat_message("assistant").write(
@@ -515,16 +568,20 @@ if user_question:
         # ---------------------------------------------------
 
         with st.expander(
-            "📚 View Retrieved Chunks"
+            "📚 Retrieved Context"
         ):
 
             for i, chunk in enumerate(
                 retrieved_chunks
             ):
 
-                st.write(f"### Chunk {i+1}")
+                st.write(
+                    f"### Chunk {i+1}"
+                )
 
-                st.write(chunk[:700])
+                st.write(
+                    chunk[:700]
+                )
 
                 st.write("---")
 
